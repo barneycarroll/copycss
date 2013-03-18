@@ -23,78 +23,88 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 (function($){
 
 	// convenience methods to turn css case ('background-image') to camel ('backgroundImage')
-	var camelize = function(string){
+	function camelize(string){
 		return string.replace(/\-([a-z])/g, function(a, b){
 			return b.toUpperCase();
 		});
 	};
 
+	var getStyle = (function forkStyleAccessMethod(){
+		if(window.getComputedStyle){
+			return function getComputedStyle(dom){
+				var style = window.getComputedStyle(dom, null);
+				var name;
+				var camel;
+				var value;
+				var product;
+				var i, l;
+
+				// make sure we're getting a good reference
+				if (style){
+					// opera doesn't give back style.length - use truthy since a 0 length may as well be skipped anyways
+					if (style.length){
+						for (i = 0, l = style.length; i < l; i++) {
+							name           = style[i];
+							camel          = camelize(name);
+							value          = style.getPropertyValue(name);
+							product[camel] = value;
+						}
+					} else {
+						// opera
+						for (name in style) {
+							camel          = camelize(name);
+							value          = style.getPropertyValue(name) || style[name];
+							product[camel] = value;
+						}
+					}
+				}
+			};
+		}
+		else if (window.currentStyle) {
+			return function getCurrentStyle(dom){
+				var name;
+				var product;
+
+				for (name in dom.currentStyle) {
+					product[name] = dom.currentStyle[name];
+				}
+			};
+		}
+		else if (window.style) {
+			return function getStyleProperty(dom){
+				var name;
+				var product;
+
+				for (name in dom.style) {
+					if (typeof dom.style[name] != 'function'){
+						product[name] = dom.style[name];
+					}
+				}
+			};
+		}
+	}());
+
 	$.fn.getStyles = function(only, except){
-		// the map to return with requested styles and values as KVP
-		var product = {};
-
-		// the style object from the DOM element we need to iterate through
-		var style;
-
-		// recycle the name of the style attribute
 		var name;
+		var product;
+		var i, l;
 
 		// if it's a limited list, no need to run through the entire style object
 		if(only && only instanceof Array){
-			for(var i = 0, l = only.length; i < l; i++){
+			for(i = 0, l = only.length; i < l; i++){
 				// since we have the name already, just return via built-in .css method
 				name          = only[i];
 				product[name] = this.css(name);
 			}
 
 		} else {
-
-			// otherwise, we need to get everything
-			var dom = this.get(0);
-
-			// standards
-			if (window.getComputedStyle) {
-				// make sure we're getting a good reference
-				if (style = window.getComputedStyle(dom, null)) {
-					var camel, value;
-					// opera doesn't give back style.length - use truthy since a 0 length may as well be skipped anyways
-					if (style.length) {
-						for (var i = 0, l = style.length; i < l; i++) {
-							name = style[i];
-							camel = camelize(name);
-							value = style.getPropertyValue(name);
-							product[camel] = value;
-						}
-					} else {
-						// opera
-						for (name in style) {
-							camel = camelize(name);
-							value = style.getPropertyValue(name) || style[name];
-							product[camel] = value;
-						}
-					}
-				}
-			}
-			// IE - first try currentStyle, then normal style object - don't bother with runtimeStyle
-			else if (style = dom.currentStyle) {
-				for (name in style) {
-					product[name] = style[name];
-				}
-			}
-			else if (style = dom.style) {
-				for (name in style) {
-					if (typeof style[name] != 'function') {
-						product[name] = style[name];
-					}
-				}
-			}
-
+			return getStyle(this.get(0));
 		}
 
 		// remove any styles specified...
 		// be careful on blacklist - sometimes vendor-specific values aren't obvious but will be visible...  e.g., excepting 'color' will still let '-webkit-text-fill-color' through, which will in fact color the text
 		if(except && except instanceof Array){
-			for(var i = 0, l = except.length; i < l; i++){
+			for(i = 0, l = except.length; i < l; i++){
 				name = except[i];
 				delete product[name];
 			}
