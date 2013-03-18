@@ -27,60 +27,93 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 		return string.replace(/\-([a-z])/g, function(a, b){
 			return b.toUpperCase();
 		});
-	};
+	}
 
+	// Wrapper function. Returns the appropriate access method dependign on browser implementation.
 	var getStyle = (function forkStyleAccessMethod(){
-		if(window.getComputedStyle){
-			return function getComputedStyle(dom){
-				var style = window.getComputedStyle(dom, null);
-				var name;
-				var camel;
-				var value;
-				var product;
-				var i, l;
+		// Used to test style object iteration
+		var testStyles = window.getComputedStyle(document.lastChild, null);
 
-				// make sure we're getting a good reference
-				if (style){
-					// opera doesn't give back style.length - use truthy since a 0 length may as well be skipped anyways
-					if (style.length){
-						for (i = 0, l = style.length; i < l; i++) {
-							name           = style[i];
-							camel          = camelize(name);
-							value          = style.getPropertyValue(name);
-							product[camel] = value;
-						}
-					} else {
-						// opera
-						for (name in style) {
-							camel          = camelize(name);
-							value          = style.getPropertyValue(name) || style[name];
-							product[camel] = value;
-						}
-					}
+		// The four possible methods for style access
+		function getComputedStyleByIndex(dom){
+			var style   = window.getComputedStyle(dom, null);
+			var product = {};
+
+			if(!style){
+				return product;
+			}
+
+			var name;
+			var camel;
+			var value;
+			var i, l;
+
+			for (i = 0, l = style.length; i < l; i++){
+				name           = style[i];
+				camel          = camelize(name);
+				value          = style.getPropertyValue(name);
+				product[camel] = value;
+			}
+
+			return product;
+		}
+
+		function getComputedStyleByName(dom){
+			var style   = window.getComputedStyle(dom, null);
+			var product = {};
+
+			if(!style){
+				return product;
+			}
+
+			var name;
+			var camel;
+			var value;
+			var i, l;
+
+			for (name in style) {
+				camel          = camelize(name);
+				value          = style.getPropertyValue(name) || style[name];
+				product[camel] = value;
+			}
+
+			return product;
+		}
+
+		function getCurrentStyle(dom){
+			var name;
+			var product = {};
+
+			for (name in dom.currentStyle) {
+				product[name] = dom.currentStyle[name];
+			}
+		}
+
+		function getStyleProperty(dom){
+			var name;
+			var product = {};
+
+			for (name in dom.style) {
+				if (typeof dom.style[name] != 'function'){
+					product[name] = dom.style[name];
 				}
-			};
+			}
+		}
+
+		// Logic to determine which method to return
+		if(window.getComputedStyle){
+			if(testStyles.length){
+				return getComputedStyleByIndex;
+			}
+			else {
+				return getComputedStyleByName;
+			}
 		}
 		else if (window.currentStyle) {
-			return function getCurrentStyle(dom){
-				var name;
-				var product;
-
-				for (name in dom.currentStyle) {
-					product[name] = dom.currentStyle[name];
-				}
-			};
+			return getCurrentStyle;
 		}
 		else if (window.style) {
-			return function getStyleProperty(dom){
-				var name;
-				var product;
-
-				for (name in dom.style) {
-					if (typeof dom.style[name] != 'function'){
-						product[name] = dom.style[name];
-					}
-				}
-			};
+			return getStyleProperty;
 		}
 	}());
 
@@ -96,9 +129,9 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 				name          = only[i];
 				product[name] = this.css(name);
 			}
-
-		} else {
-			return getStyle(this.get(0));
+		}
+		else {
+			product = getStyle(this.get(0));
 		}
 
 		// remove any styles specified...
@@ -112,7 +145,6 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 		// one way out so we can process blacklist in one spot
 		return product;
-
 	};
 
 	// sugar - source is the selector, dom element or jQuery instance to copy from - only and except are optional
